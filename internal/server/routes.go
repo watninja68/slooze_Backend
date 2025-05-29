@@ -64,6 +64,8 @@ func (s *Server) RegisterRoutes() http.Handler {
 		r.Route("/me", func(r chi.Router) {
 			// TODO: Implement GET /me/payment-methods (User's own)
 			// TODO: Implement POST /me/payment-methods (User's own)
+			r.Get("/payment-methods", handlers.ListPaymentMethods)
+			r.Put("/payment-methods", handlers.AddPaymentMethod)
 		})
 
 		// --- Admin-Specific User Payment Methods ---

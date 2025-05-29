@@ -90,9 +90,13 @@ func New() Service {
 	if dbInstance != nil {
 		return dbInstance
 	}
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&search_path=%s", username, password, host, port, database, schema)
-	db, err := sql.Open("pgx", connStr)
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=require&search_path=%s",
 
+		username, password, host, port, database, schema)
+	db, err := sql.Open("pgx", connStr)
+	if _, err := db.Exec(`SET statement_timeout = 0`); err != nil {
+		log.Fatalf("could not clear statement_timeout: %v", err)
+	}
 	if err := MigrateFs(db, migrations.FS, "."); err != nil {
 		if statusErr := MigrateStatus(db, "."); statusErr != nil {
 			log.Printf("Additionally failed to get migration status: %v", statusErr)

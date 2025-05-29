@@ -2,10 +2,10 @@
 -- Seed Restaurants
 INSERT INTO restaurants (name, address, country_id)
 VALUES
-  ('Bombay Bites', '123 Marine Drive, Mumbai', (SELECT id FROM countries WHERE name = 'India')),
-  ('Spice Villa',  '45 MG Road, Bangalore',   (SELECT id FROM countries WHERE name = 'India')),
-  ('Liberty Diner','200 Broadway, New York',   (SELECT id FROM countries WHERE name = 'America')),
-  ('Route 66 Grill','555 Sunset Blvd, LA',     (SELECT id FROM countries WHERE name = 'America'));
+  ('Bombay Bites', '123 Marine Drive, Mumbai', 0),
+  ('Spice Villa',  '45 MG Road, Bangalore',   0),
+  ('Liberty Diner','200 Broadway, New York',   1),
+  ('Route 66 Grill','555 Sunset Blvd, LA',     1);
 
 -- Seed Menu Items
 INSERT INTO menu_items (restaurant_id, name, description, price)

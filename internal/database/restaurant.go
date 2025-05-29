@@ -3,6 +3,7 @@ package database
 import (
 	"backend/internal/models"
 	"context"
+	"fmt"
 )
 
 func (s *service) ListRestaurantsDB(ctx context.Context, countryFilter *int64) ([]models.Restaurant, error) {
@@ -11,6 +12,7 @@ func (s *service) ListRestaurantsDB(ctx context.Context, countryFilter *int64) (
 	if countryFilter != nil {
 		query += ` WHERE country_id = $1`
 		args = append(args, *countryFilter)
+
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -20,11 +22,21 @@ func (s *service) ListRestaurantsDB(ctx context.Context, countryFilter *int64) (
 	defer rows.Close()
 
 	var out []models.Restaurant
+	var temp models.Restaurant
+
+	temp.ID = 1
+	temp.Name = "dummy"
+	temp.Address = "vennahi"
+	temp.CountryID = 0
+	out = append(out, temp)
 	for rows.Next() {
 		var r models.Restaurant
 		if err := rows.Scan(&r.ID, &r.Name, &r.Address, &r.CountryID); err != nil {
 			return nil, err
 		}
+
+		fmt.Println("--------------In Loop---------------------------------")
+		fmt.Println(r.Name)
 		out = append(out, r)
 	}
 	return out, rows.Err()

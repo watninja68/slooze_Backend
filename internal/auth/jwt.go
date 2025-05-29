@@ -1,11 +1,13 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base32"
 	"errors"
+	"github.com/golang-jwt/jwt/v5"
 	_ "os"
 	"time"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 var (
@@ -16,14 +18,16 @@ var (
 
 // Claims carries the *minimum* you need in every request
 type Claims struct {
-	UserID  int    `json:"uid"`
-	Role    string `json:"role"`
-	Country string `json:"country"`
+	Plaintext string `json:"token"`
+	UserID    int    `json:"uid"`
+	Hash      []byte `json:"-"`
+	Role      string `json:"role"`
+	Country   string `json:"country"`
 	jwt.RegisteredClaims
 }
 
 // GenerateToken signs a new 24-hour token
-func GenerateToken(userID int, role, country string) (string, error) {
+func GenerateToken(userID int, role, country string) (*Claims, error) {
 	claims := Claims{
 		UserID:  userID,
 		Role:    role,
@@ -33,7 +37,17 @@ func GenerateToken(userID int, role, country string) (string, error) {
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret)
+	emptyBytes := make([]byte, 32)
+	_, err := rand.Read(emptyBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	claims.Plaintext = base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(emptyBytes)
+	hash := sha256.Sum256([]byte(claims.Plaintext))
+	claims.Hash = hash[:]
+	return &claims, nil
+
 }
 
 // ParseToken verifies signature *and* expiry, returning custom claims

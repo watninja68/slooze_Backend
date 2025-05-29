@@ -3,6 +3,7 @@ package handlers
 import (
 	"backend/internal/database"
 	"encoding/json"
+	//"fmt"
 	"net/http"
 	"strconv"
 
@@ -32,7 +33,8 @@ type PaymentMethodUpdateRequest struct {
 
 // GET /users/{userId}/payment-methods
 func ListPaymentMethods(w http.ResponseWriter, r *http.Request) {
-	userIDStr := chi.URLParam(r, "userId")
+	//userIDStr := chi.URLParam(r, "userId")
+	userIDStr := "1"
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "userId must be an integer", http.StatusBadRequest)
@@ -120,4 +122,3 @@ func UpdatePaymentMethod(w http.ResponseWriter, r *http.Request) {
 		"message": "payment method updated successfully",
 	})
 }
-

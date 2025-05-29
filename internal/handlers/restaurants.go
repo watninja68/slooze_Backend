@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings" // Added for strings.ToUpper
@@ -14,6 +15,7 @@ import (
 )
 
 func ListRestaurants(w http.ResponseWriter, r *http.Request) {
+
 	u := r.Context().Value(middleware.CtxUserKey).(middleware.AuthUser) // Changed user to u, and type to middleware.AuthUser
 
 	// Admins see all, others only their country
@@ -23,10 +25,17 @@ func ListRestaurants(w http.ResponseWriter, r *http.Request) {
 	}
 
 	restaurants, err := database.New().ListRestaurantsDB(r.Context(), countryFilter)
+
+	fmt.Println(restaurants)
 	if err != nil {
+
+		fmt.Print("--------err----------------")
+		fmt.Print(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(restaurants)
 }
 
@@ -61,4 +70,3 @@ func GetMenu(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(menu)
 }
-
