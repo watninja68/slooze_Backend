@@ -5,6 +5,7 @@ import (
 	"backend/migrations"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
@@ -17,10 +18,9 @@ import (
 )
 
 type Service interface {
-	// Health check
 	Health() map[string]string
-	// Order operations
 	CreateOrderDB(ctx context.Context, userID, restaurantID int64, totalPrice float64) (int64, error)
+	GetUserByID(ctx context.Context, id int) (models.User, error)
 	ListRestaurantsDB(ctx context.Context, countryFilter *int64) ([]models.Restaurant, error)
 	GetMenuItemsDB(ctx context.Context, restaurantID int64) ([]models.MenuItem, error)
 	ListOrdersDB(ctx context.Context) ([]Order, error)
@@ -193,4 +193,28 @@ func (s *service) Health() map[string]string {
 func (s *service) Close() error {
 	log.Printf("Disconnected from database: %s", database)
 	return s.db.Close()
+}
+func (s *service) GetUserByID(ctx context.Context, id int) (models.User, error) {
+	const q = `
+        SELECT u.id, u.name, u.email,
+               r.id, r.name,
+               c.id, c.name
+        FROM users u
+        JOIN roles      r ON r.id = u.role_id
+        JOIN countries  c ON c.id = u.country_id
+        WHERE u.id = $1
+        LIMIT 1;
+    `
+	var out models.User
+	if err := s.db.QueryRowContext(ctx, q, id).
+		Scan(&out.ID, &out.Name, &out.Email,
+			&out.Role.ID, &out.Role.Name,
+			&out.Country.ID, &out.Country.Name); err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			return out, fmt.Errorf("user %d not found", id)
+		}
+		return out, fmt.Errorf("get user by id: %w", err)
+	}
+	return out, nil
 }
