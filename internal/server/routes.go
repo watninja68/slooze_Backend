@@ -22,7 +22,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 		AllowedOrigins:   []string{"https://*", "http://*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"}, // Added X-CSRF-Token
-		ExposedHeaders:   []string{"Link"},                                                     // Added Link
+		ExposedHeaders:   []string{"Link"},                                                    // Added Link
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
@@ -30,8 +30,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 	// --- Public Routes ---
 	r.Get("/", s.HelloWorldHandler)
 	r.Get("/health", s.healthHandler)
-	// TODO: Add a POST /api/v1/auth/login route
-
+	r.Get("/users/{userId}/payment-methods", handlers.ListPaymentMethods)
+	r.Post("/users/{userId}/payment-methods", handlers.AddPaymentMethod)
+	r.Put("/payment-methods/{methodId}", handlers.UpdatePaymentMethod)
 	// --- API v1 Group with Authentication ---
 	r.Route("/api/v1", func(r chi.Router) {
 		// Apply AuthMiddleware to all /api/v1 routes
@@ -43,26 +44,14 @@ func (s *Server) RegisterRoutes() http.Handler {
 		r.Get("/restaurants", handlers.ListRestaurants)
 		r.Get("/restaurants/{restaurantId}/menu", handlers.GetMenu)
 
-		// --- Orders ---
 		r.Route("/orders", func(r chi.Router) {
-			// Create order (All roles) [cite: 8]
 			r.Post("/", handlers.CreateOrder)
-			// List orders (Filtered by role/country)
 			r.Get("/", handlers.ListOrders)
-
-			r.Route("/{orderId}", func(r chi.Router) {
-				// Get specific order (Filtered)
-				r.Get("/", handlers.GetOrder)
-				// Add items (All roles, ownership check needed) [cite: 8]
-				r.Post("/items", handlers.AddItemToOrder)
-
-				// Checkout (Manager/Admin only) [cite: 8]
-				r.With(middleware.ManagerOrAdminOnly).Post("/checkout", handlers.CheckoutOrder)
-				// Cancel (Manager/Admin only) [cite: 10]
-				r.With(middleware.ManagerOrAdminOnly).Post("/cancel", handlers.CancelOrder)
-			})
+			r.Get("/{orderId}", handlers.GetOrder)
+			r.Post("/{orderId}/items", handlers.AddItemToOrder)
+			r.Post("/{orderId}/checkout", handlers.CheckoutOrder)
+			r.Post("/{orderId}/cancel", handlers.CancelOrder)
 		})
-
 		// --- Payment Methods ---
 		r.Route("/payment-methods", func(r chi.Router) {
 			// Update payment method (Admin only) [cite: 10]

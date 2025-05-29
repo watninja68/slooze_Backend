@@ -3,103 +3,51 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
+
+	"backend/internal/auth"
+	"backend/internal/models" // change to your DAL package
 )
 
-// UserCtxKey is a key for storing user info in the request context.
+// UserCtxKey / AuthUser unchanged
 type UserCtxKey string
 
 const CtxUserKey UserCtxKey = "user"
 
-// Placeholder User struct (adapt as needed)
-type AuthUser struct {
-	ID      int
-	Role    string // e.g., "ADMIN", "MANAGER", "MEMBER"
-	Country string // e.g., "India", "America"
-}
-
-// Placeholder Authentication Middleware
+// AuthMiddleware validates JWT, refreshes user from DB, sets context.
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement actual token validation (e.g., JWT)
-		// 1. Get token from header
-		// 2. Validate token
-		// 3. Fetch user details (ID, role, country) from DB or token claims
-		// 4. If valid, add user to context and call next.ServeHTTP
-		// 5. If invalid, return http.StatusUnauthorized
 
-		// --- Placeholder ---
-		// For demonstration, let's assume a valid user is always present
-		// In a real app, you MUST implement real validation.
-		// You might fetch this based on an API key or token.
-		// We'll hardcode a Manager from India for now.
-		user := AuthUser{ID: 2, Role: "MANAGER", Country: "India"}
-
-		// Add user to context
-		ctx := context.WithValue(r.Context(), CtxUserKey, user)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// Helper to get user from context
-func GetUserFromContext(r *http.Request) (AuthUser, bool) {
-	user, ok := r.Context().Value(CtxUserKey).(AuthUser)
-	return user, ok
-}
-
-// Placeholder RBAC Middleware - Admin Only
-func AdminOnly(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, ok := GetUserFromContext(r)
-		if !ok || user.Role != "ADMIN" {
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		// ---- 1. Extract "Authorization: Bearer <token>" header ----
+		h := r.Header.Get("Authorization")
+		if !strings.HasPrefix(h, "Bearer ") {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-		next.ServeHTTP(w, r)
-	})
-}
+		tokenStr := strings.TrimPrefix(h, "Bearer ")
 
-// Placeholder RBAC Middleware - Manager or Admin
-func ManagerOrAdminOnly(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, ok := GetUserFromContext(r)
-		if !ok || (user.Role != "MANAGER" && user.Role != "ADMIN") {
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// Placeholder Country Check Middleware (Can be integrated into handlers or separate)
-// This is more complex as it depends on the resource being accessed.
-// Often, it's better handled within the handler or database layer.
-// Example:
-func CountryCheck(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, ok := GetUserFromContext(r)
-		if !ok {
+		// ---- 2. Validate + get claims ----
+		claims, err := auth.ParseToken(tokenStr)
+		if err != nil {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
 
-		// If user is Admin, they can access anything
-		if user.Role == "ADMIN" {
-			next.ServeHTTP(w, r)
+		// ---- 3. Load the latest user from DB (optional but recommended) ----
+		u, err := models.GetUserByID(r.Context(), claims.UserID) // implement in DAL
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
 
-		// TODO: For Manager/Member, check the resource's country.
-		// This requires knowing WHAT is being accessed (e.g., restaurantId, orderId)
-		// and fetching its country from the DB, then comparing.
-		// This is a simplified example and needs real implementation.
-		// resourceCountry := "India" // Fetch this based on URL params/DB
-		// if user.Country == resourceCountry {
-		// 	next.ServeHTTP(w, r)
-		// } else {
-		// 	http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-		// }
+		authUser := AuthUser{
+			ID:      u.ID,
+			Role:    u.Role.Name,    // assuming joined role
+			Country: u.Country.Name, // assuming joined country
+		}
 
-		// For now, let's just pass through and handle in handlers.
-		next.ServeHTTP(w, r)
+		// ---- 4. Inject into request context ----
+		ctx := context.WithValue(r.Context(), CtxUserKey, authUser)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

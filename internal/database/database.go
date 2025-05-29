@@ -1,32 +1,35 @@
 package database
 
 import (
+	"backend/internal/models"
 	"backend/migrations"
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
-	"os"
-	"strconv"
-	"time"
-
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/pressly/goose/v3"
 	"io/fs"
+	"log"
+	"os"
+	"strconv"
+	"time"
 )
 
-// Service represents a service that interacts with a database.
 type Service interface {
-	// Health returns a map of health status information.
-	// The keys and values in the map are service-specific.
+	// Health check
 	Health() map[string]string
-
-	// Close terminates the database connection.
-	// It returns an error if the connection cannot be closed.
+	// Order operations
+	CreateOrderDB(ctx context.Context, userID, restaurantID int64, totalPrice float64) (int64, error)
+	ListRestaurantsDB(ctx context.Context, countryFilter *int64) ([]models.Restaurant, error)
+	GetMenuItemsDB(ctx context.Context, restaurantID int64) ([]models.MenuItem, error)
+	ListOrdersDB(ctx context.Context) ([]Order, error)
+	GetOrderDB(ctx context.Context, id int64) (Order, error)
+	ListPaymentMethodsDB(ctx context.Context, userID int64) ([]PaymentMethod, error)
+	AddPaymentMethodDB(ctx context.Context, pm PaymentMethod) (int64, error)
+	UpdatePaymentMethodDB(ctx context.Context, pm PaymentMethod) error
 	Close() error
 }
-
 type service struct {
 	db *sql.DB
 }
@@ -83,6 +86,31 @@ func MigrateStatus(db *sql.DB, dir string) error {
 	return nil
 }
 func New() Service {
+	// Reuse Connection
+	if dbInstance != nil {
+		return dbInstance
+	}
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&search_path=%s", username, password, host, port, database, schema)
+	db, err := sql.Open("pgx", connStr)
+
+	if err := MigrateFs(db, migrations.FS, "."); err != nil {
+		if statusErr := MigrateStatus(db, "."); statusErr != nil {
+			log.Printf("Additionally failed to get migration status: %v", statusErr)
+		}
+		log.Panicf("Migration error during New(): %v", err)
+	}
+	log.Println("Database migrations applied successfully.")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	dbInstance = &service{
+		db: db,
+	}
+	return dbInstance
+}
+
+func CreateOrderDB() Service {
 	// Reuse Connection
 	if dbInstance != nil {
 		return dbInstance

@@ -1,38 +1,123 @@
 package handlers
 
 import (
+	"backend/internal/database"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 )
 
-// Placeholder for listing payment methods
+// ─── Request / Response DTOs ──────────────────────────────────────────────────
+
+type PaymentMethodCreateRequest struct {
+	MethodType string `json:"method_type"`          // e.g. credit_card, upi
+	Details    string `json:"details"`              // token or encrypted blob
+	IsDefault  bool   `json:"is_default,omitempty"` // optional
+}
+
+type PaymentMethodCreateResponse struct {
+	PaymentMethodID int64  `json:"payment_method_id"`
+	Message         string `json:"message"`
+}
+
+type PaymentMethodUpdateRequest struct {
+	MethodType string `json:"method_type"`
+	Details    string `json:"details"`
+	IsDefault  bool   `json:"is_default"`
+}
+
+// ─── Handlers ────────────────────────────────────────────────────────────────
+
+// GET /users/{userId}/payment-methods
 func ListPaymentMethods(w http.ResponseWriter, r *http.Request) {
-	userID := chi.URLParam(r, "userId")
-	// TODO: Check if current user can view this (self or Admin)
-	// TODO: Implement DB logic
-	resp := map[string]string{"message": "Payment methods for user " + userID}
-	json.NewEncoder(w).Encode(resp)
+	userIDStr := chi.URLParam(r, "userId")
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "userId must be an integer", http.StatusBadRequest)
+		return
+	}
+
+	svc := database.New()
+	methods, err := svc.ListPaymentMethodsDB(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "could not list payment methods: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, methods)
 }
 
-// Placeholder for adding a payment method
+// POST /users/{userId}/payment-methods
 func AddPaymentMethod(w http.ResponseWriter, r *http.Request) {
-	userID := chi.URLParam(r, "userId")
-	// TODO: Check if current user can add (self or Admin)
-	// TODO: Decode body
-	// TODO: Implement DB logic
-	resp := map[string]string{"message": "Payment method added for user " + userID}
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(resp)
+	userIDStr := chi.URLParam(r, "userId")
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "userId must be an integer", http.StatusBadRequest)
+		return
+	}
+
+	var req PaymentMethodCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.MethodType == "" || req.Details == "" {
+		http.Error(w, "`method_type` and `details` are required", http.StatusBadRequest)
+		return
+	}
+
+	svc := database.New()
+	id, err := svc.AddPaymentMethodDB(r.Context(), database.PaymentMethod{
+		UserID:    userID,
+		Type:      req.MethodType,
+		Details:   req.Details,
+		IsDefault: req.IsDefault,
+	})
+	if err != nil {
+		http.Error(w, "could not add payment method: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := PaymentMethodCreateResponse{
+		PaymentMethodID: id,
+		Message:         "payment method added successfully",
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
-// Placeholder for updating a payment method
+// PUT /payment-methods/{methodId}
 func UpdatePaymentMethod(w http.ResponseWriter, r *http.Request) {
-	methodID := chi.URLParam(r, "methodId")
-	// TODO: Check if user is Admin (Strict interpretation)
-	// TODO: Decode body
-	// TODO: Implement DB logic
-	resp := map[string]string{"message": "Payment method " + methodID + " updated"}
-	json.NewEncoder(w).Encode(resp)
+	methodIDStr := chi.URLParam(r, "methodId")
+	methodID, err := strconv.ParseInt(methodIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "methodId must be an integer", http.StatusBadRequest)
+		return
+	}
+
+	var req PaymentMethodUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.MethodType == "" || req.Details == "" {
+		http.Error(w, "`method_type` and `details` are required", http.StatusBadRequest)
+		return
+	}
+
+	svc := database.New()
+	if err := svc.UpdatePaymentMethodDB(r.Context(), database.PaymentMethod{
+		ID:        methodID,
+		Type:      req.MethodType,
+		Details:   req.Details,
+		IsDefault: req.IsDefault,
+	}); err != nil {
+		http.Error(w, "could not update payment method: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "payment method updated successfully",
+	})
 }
+
